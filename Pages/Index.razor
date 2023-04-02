@@ -1,0 +1,98 @@
+﻿@page "/"
+@using BlazorWASM
+@inject IJSRuntime JSRuntime
+
+<h3>Minesweeper</h3>
+
+<div>
+    <label for="boardSize">Board size:</label>
+    <input id="boardSize" type="number" @bind="boardSize" min="5" max="30" />
+</div>
+<div>
+    <label for="difficulty">Difficulty (mines):</label>
+    <input id="difficulty" type="number" @bind="difficulty" min="1" max="@((boardSize * boardSize) - 1)" />
+</div>
+<div>
+    <button @onclick="InitializeGame">Start game</button>
+</div>
+
+@if (game != null)
+{
+    <div class="game-board">
+        @for (int row = 0; row < game.Board.Size; row++)
+        {
+            <div class="game-row">
+                @for (int column = 0; column < game.Board.Size; column++)
+                {
+                    <button class="game-cell" @onclick="(() => ClickCell(row, column))">
+                        @GetCellContent(row, column)
+                    </button>
+                }
+            </div>
+        }
+    </div>
+
+    @if (game.IsGameOver)
+    {
+        <h4>@(game.IsGameWon ? "Congratulations, you won!" : "Oops, you hit a mine! Game over!")</h4>
+    }
+}
+
+<style>
+    .game-board {
+        display: inline-grid;
+    }
+
+    .game-row {
+        display: flex;
+    }
+
+    .game-cell {
+        width: 30px;
+        height: 30px;
+        border: 1px solid #ccc;
+        text-align: center;
+        font-weight: bold;
+    }
+</style>
+
+@code {
+    private int boardSize = 12;
+    private int difficulty = 15;
+    private MinesweeperGame? game;
+
+    private void InitializeGame()
+    {
+        game = new MinesweeperGame(boardSize, difficulty);
+    }
+
+    private void ClickCell(int row, int column)
+    {
+        if (game == null || game.IsGameOver) return;
+
+        game.ClickCell(row, column);
+
+        if (game.IsGameOver)
+        {
+            _ = JSRuntime.InvokeVoidAsync("alert", game.IsGameWon ? "Congratulations, you won!" : "Oops, you hit a mine! Game over!");
+        }
+    }
+
+    private string GetCellContent(int row, int column)
+    {
+        if (game == null) return string.Empty;
+
+        var cell = game.Board.Grid[row, column];
+        if (!cell.Visited)
+        {
+            return string.Empty;
+        }
+
+        if (cell.Live)
+        {
+            return "💣";
+        }
+
+        return cell.LiveNeighbors > 0 ? cell.LiveNeighbors.ToString() : string.Empty;
+    }
+}
