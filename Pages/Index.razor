@@ -1,6 +1,8 @@
 ﻿@page "/"
 @using BlazorWASM
 @inject IJSRuntime JSRuntime
+@using Microsoft.Extensions.Logging
+@inject ILogger<Index> Logger
 
 <h3>Minesweeper</h3>
 
@@ -12,8 +14,10 @@
     <label for="difficulty">Difficulty (mines):</label>
     <input id="difficulty" type="number" @bind="difficulty" min="1" max="@((boardSize * boardSize) - 1)" />
 </div>
+
 <div>
     <button @onclick="InitializeGame">Start game</button>
+    
 </div>
 
 @if (game != null)
@@ -24,12 +28,16 @@
             <div class="game-row">
                 @for (int column = 0; column < game.Board.Size; column++)
                 {
-                    <button class="game-cell" @onclick="(() => ClickCell(row, column))">
+                    string buttonId = $"button-{row}-{column}";
+                    <button id="@buttonId" class="game-cell" @onclick="() => ClickCell(row, column, buttonId)" @oncontextmenu:preventDefault @oncontextmenu="() => FlagCell(row, column, buttonId, true)">
                         @GetCellContent(row, column)
                     </button>
+
                 }
+                
             </div>
         }
+
     </div>
 
     @if (game.IsGameOver)
@@ -53,6 +61,7 @@
         border: 1px solid #ccc;
         text-align: center;
         font-weight: bold;
+
     }
 </style>
 
@@ -60,32 +69,100 @@
     private int boardSize = 12;
     private int difficulty = 15;
     private MinesweeperGame? game;
+    
 
     private void InitializeGame()
     {
-        game = new MinesweeperGame(boardSize, difficulty);
+        game = new MinesweeperGame(boardSize, difficulty, OnCellUpdated);
     }
+    private bool toggleRightClick = true;
 
-    private void ClickCell(int row, int column)
+    public void FlagCell(int row, int col, string buttonId, bool isRightClick)
     {
-        if (game == null || game.IsGameOver) return;
-
-        game.ClickCell(row, column);
-
-        if (game.IsGameOver)
+        if (!isRightClick || toggleRightClick)
         {
-            _ = JSRuntime.InvokeVoidAsync("alert", game.IsGameWon ? "Congratulations, you won!" : "Oops, you hit a mine! Game over!");
+            // Extract row and column from buttonId
+            string[] parts = buttonId.Split("-");
+            int clickedRow = int.Parse(parts[1]);
+            int clickedCol = int.Parse(parts[2]);
+            var cell = game.Board.Grid[clickedRow, clickedCol];
+
+            // Add or remove the flag
+            cell.IsFlagged = !cell.IsFlagged;
+
+            // Update the UI
+            StateHasChanged();
         }
     }
 
-    private string GetCellContent(int row, int column)
+    private void ToggleRightClick()
     {
-        if (game == null) return string.Empty;
+        toggleRightClick = !toggleRightClick;
+    }
 
-        var cell = game.Board.Grid[row, column];
+
+    public void OnCellUpdated(int row, int col, string emoji)
+    {
+        StateHasChanged();
+    }
+
+
+    private void ClickCell(int row, int column, string buttonId)
+{
+    Logger.LogInformation($"ClickCell called with row = {row}, column = {column}");
+    if (game == null || game.IsGameOver)
+    {
+        Logger.LogInformation("Game is null or over, exiting ClickCell method");
+        return;
+    }
+
+    // Extract row and column from buttonId
+    string[] parts = buttonId.Split("-");
+    int clickedRow = int.Parse(parts[1]);
+    int clickedCol = int.Parse(parts[2]);
+
+    Logger.LogInformation($"Button clicked: row={clickedRow}, col={clickedCol}");
+
+    int liveNeighbors = game.ClickCell(clickedRow, clickedCol);
+    //Logger.LogInformation($"Live neighbors for cell ({clickedRow}, {clickedCol}): {liveNeighbors}");
+
+    if (game.IsGameOver)
+    {
+        _ = JSRuntime.InvokeVoidAsync("alert", game.IsGameWon ? "Congratulations, you won!" : "Oops, you hit a mine! Game over!");
+    }
+    else if (liveNeighbors == 0)
+    {
+        // Trigger the flood fill
+        Logger.LogInformation($"Flood fill triggered for cell ({clickedRow}, {clickedCol})");
+        game.Board.FloodFillAll();
+
+        // Remove this line, as it's causing the issue
+        game.Board.CalculateLiveNeighbors();
+
+        // Add this line to update the UI after flood fill
+        StateHasChanged();
+    }
+    else
+    {
+        StateHasChanged();
+    }
+}
+    
+    
+
+    public string GetCellContent(int row, int column)
+    {
+        if (game == null)
+        {
+            InitializeGame();
+        }
+
+        Cell cell = game.Board.Grid[row, column];
+
         if (!cell.Visited)
         {
-            return string.Empty;
+            // Show the row and column indices for unvisited cells
+            return cell.IsFlagged ? "🚩" : "◻️";
         }
 
         if (cell.Live)
@@ -93,6 +170,16 @@
             return "💣";
         }
 
+        // Use an emoji for visited cells with no live neighbors
+        if (cell.LiveNeighbors == 0)
+        {
+            return "🟩"; // Example emoji: Green square
+        }
+
         return cell.LiveNeighbors > 0 ? cell.LiveNeighbors.ToString() : string.Empty;
     }
+
+
+
+
 }

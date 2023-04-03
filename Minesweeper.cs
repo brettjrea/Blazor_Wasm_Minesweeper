@@ -1,25 +1,29 @@
-﻿using BlazorWASM;
+﻿using Microsoft.AspNetCore.Components;
+using BlazorWASM;
 
 
 namespace BlazorWASM
 {
-    public class MinesweeperGame
+    public class MinesweeperGame : ComponentBase
     {
         public Board Board { get; private set; }
         public bool IsGameOver { get; private set; }
         public bool IsGameWon { get; private set; }
 
-        public MinesweeperGame(int size, int difficulty)
+        public MinesweeperGame(int size, int difficulty, Action<int, int, string>? onCellUpdated = null)
         {
-            Board = new Board(size);
+            Board = new Board(size, onCellUpdated);
             Board.SetDifficulty(difficulty);
             Board.SetupLiveNeighbors();
             Board.CalculateLiveNeighbors();
         }
 
-        public void ClickCell(int row, int column)
+        public int ClickCell(int row, int column)
         {
-            if (IsGameOver) return;
+            if (IsGameOver || row < 0 || row >= Board.Size || column < 0 || column >= Board.Size)
+            {
+                return 0;
+            }
 
             Cell cell = Board.Grid[row, column];
 
@@ -27,9 +31,8 @@ namespace BlazorWASM
             {
                 IsGameOver = true;
                 RevealAllCells();
-                return;
+                return -1; // indicates that a mine was clicked
             }
-
             cell.Visited = true;
 
             if (cell.LiveNeighbors == 0)
@@ -38,7 +41,13 @@ namespace BlazorWASM
             }
 
             CheckIfGameWon();
+
+            return cell.LiveNeighbors;
         }
+
+
+
+
 
         private void RevealAllCells()
         {

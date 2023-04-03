@@ -12,11 +12,13 @@
             Live = false;
             LiveNeighbors = 0;
         }
-
+        public bool IsFlagged { get; set; }
         public void SetVisited(bool visited)
         {
             Visited = visited;
+          
         }
+
 
         public void SetLive(bool live)
         {

@@ -1,17 +1,21 @@
-﻿using System;
+﻿using Microsoft.AspNetCore.Components;
+using System;
+
 namespace BlazorWASM
 
 {
-    public class Board
+    public class Board : ComponentBase
     {
+        public Action<int, int, string>? OnCellUpdated { get; set; }
         public int Size { get; private set; }
         public Cell[,] Grid { get; private set; }
         private int Difficulty;
 
-        public Board(int size)
+        public Board(int size, Action<int, int, string>? onCellUpdated = null)
         {
             Size = size;
             Grid = new Cell[size, size];
+            OnCellUpdated = onCellUpdated;
 
             // Initialize cells
             for (int row = 0; row < size; row++)
@@ -79,6 +83,7 @@ namespace BlazorWASM
                         liveNeighbors--;
                     }
                     Grid[row, col].SetLiveNeighbors(liveNeighbors);
+                    //Console.WriteLine($"Live neighbors for cell ({row}, {col}): {liveNeighbors}");
                 }
             }
         }
@@ -90,14 +95,17 @@ namespace BlazorWASM
                 return;
             }
 
-            if (Grid[row, col].GetVisited() || Grid[row, col].GetLive())
+            Cell cell = Grid[row, col];
+
+            if (cell.Visited || cell.Live)
             {
                 return;
             }
 
-            Grid[row, col].SetVisited(true);
+            cell.SetVisited(true);
+            OnCellUpdated?.Invoke(row, col, "🟩"); // green square emoji for visited cells
 
-            if (Grid[row, col].GetLiveNeighbors() > 0)
+            if (cell.LiveNeighbors > 0)
             {
                 return;
             }
@@ -111,6 +119,31 @@ namespace BlazorWASM
             FloodFill(row + 1, col - 1);
             FloodFill(row + 1, col + 1);
         }
+
+        public void FloodFillAll()
+        {
+            // Reset all cells to unvisited
+            foreach (var cell in Grid)
+            {
+                cell.SetVisited(false);
+            }
+
+            // Flood fill from all cells with no live neighbors
+            for (int row = 0; row < Size; row++)
+            {
+                for (int col = 0; col < Size; col++)
+                {
+                    var cell = Grid[row, col];
+                    if (cell.LiveNeighbors == 0 && !cell.Visited)
+                    {
+                        FloodFill(row, col);
+                    }
+                }
+            }
+        }
+
+
+
 
     }
 
